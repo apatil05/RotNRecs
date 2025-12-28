@@ -22,7 +22,12 @@
                 <h2>Create your account</h2>
                 <p class="auth-subtitle">Or <a href="login.html">sign in to your existing account</a></p>
                 
-                <form id="register-form" class="auth-form">
+                <form id="register-form" class="auth-form" method="POST" action="http://localhost:8000/register">
+                    <div class="form-group">
+                        <label for="name">Name</label>
+                        <input type="text" id="name" name="name" required>
+                    </div>
+                    
                     <div class="form-group">
                         <label for="email">Email address</label>
                         <input type="email" id="email" name="email" required>

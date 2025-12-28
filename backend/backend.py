@@ -10,7 +10,7 @@ def read_root():
 
 
 #adds user info to the DB.
-@app.post("../frontend/register.html")
+@app.post("/register")
 def creat_acct():
     #need to add post code here:
 
