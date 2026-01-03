@@ -54,6 +54,7 @@ def read_register():
     with open(register_path, "r") as f:
         return f.read()
 
+#TODO need to fix register post w/ database something weird comes up when entering form. 422 error
 #adds user info to the DB when user submits form.
 @app.post("/register")
 def creat_acct(user: UserCreate):
