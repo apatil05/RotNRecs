@@ -40,6 +40,34 @@ def read_index():
         html_content = f.read()
     return html_content
 
+#reads login html when user enters page.
+@app.get("/login", response_class=HTMLResponse)
+def read_login():
+    login_path = FRONTEND_DIR / "login.html"
+    with open(login_path, "r") as f:
+        return f.read()
+    
+@app.post("/login")
+def check_acct(
+    email: EmailStr = Form(...),
+    password: str = Form(...)):
+    cursor.execute("SELECT * FROM Users WHERE email = ?", (email,))
+    row = cursor.fetchone()
+
+    if row is None:
+        raise HTTPException(status_code=400, detail="User does not exist")
+
+    stored_hash = row[3]  # hashed password from DB
+
+    #checks if passwords are correct
+    if not bcrypt.checkpw(
+        password.encode("utf-8"),
+        stored_hash.encode("utf-8")
+    ):
+        raise HTTPException(status_code=400, detail="Incorrect password")
+    
+    return {"message": "Login successful"}
+        
 
 #reads register html when user enter page.
 @app.get("/register", response_class=HTMLResponse)
@@ -54,8 +82,6 @@ def read_register():
 def creat_acct(name: str = Form(...),
     email: EmailStr = Form(...),
     password: str = Form(...)):
-
-    print(name, email, password)  # 👈 DEBUG
 
     #checks if email exists already
     cursor.execute("SELECT * FROM Users WHERE email = ?", (email,))
