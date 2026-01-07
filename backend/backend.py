@@ -1,8 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi import Form
 from pydantic import BaseModel, EmailStr
 from pathlib import Path
+
 import sqlite3
 import bcrypt
 
@@ -26,14 +28,6 @@ conn.commit()
 # Create FastAPI app instance
 app = FastAPI()
 
-#converts data from JSON to python safely
-class UserCreate(BaseModel):
-    name: str
-    email: EmailStr
-    password: str
-
-
-
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
 
@@ -54,22 +48,28 @@ def read_register():
     with open(register_path, "r") as f:
         return f.read()
 
-#TODO need to fix register post w/ database something weird comes up when entering form. 422 error
 #adds user info to the DB when user submits form.
 @app.post("/register")
-def creat_acct(user: UserCreate):
+#Form is required to convert html data to JSON 
+def creat_acct(name: str = Form(...),
+    email: EmailStr = Form(...),
+    password: str = Form(...)):
+
+    print(name, email, password)  # 👈 DEBUG
+
     #checks if email exists already
-    cursor.execute("SELECT * FROM Users WHERE email = ?", (user.email,))
+    cursor.execute("SELECT * FROM Users WHERE email = ?", (email,))
     existing_user = cursor.fetchone()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    hashed_password = bcrypt.hashpw(user.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    #hashes pass in db to hide user info.
+    hashed_password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     cursor.execute(
         "INSERT INTO Users (name, email, password) VALUES (?, ?, ?)",
-        (user.name, user.email, hashed_password) 
+        (name, email, hashed_password) 
     )
     conn.commit()
 
-    return {"message": f"successfully created User: {user.name}"}
+    return {"message": f"successfully created User: {name}"}
