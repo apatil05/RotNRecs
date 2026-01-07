@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recommendations - RotNRecs</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">RotNRecs</a>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/login" class="nav-login">Login</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <div class="auth-container">
+            <div class="auth-card" style="max-width: 600px;">
+                <h2>Tell us about your favorite movies</h2>
+                <p class="auth-subtitle">Add movies you like to get personalized recommendations</p>
+                
+                <form id="recommendations-form" class="auth-form">
+                    <div id="movies-container">
+                        <div class="movie-entry">
+                            <div class="form-group">
+                                <label for="movie-1">Movie Title</label>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <input type="text" id="movie-1" name="movie" class="movie-input" placeholder="Enter a movie title" required>
+                                    <button type="button" class="btn-remove" onclick="removeMovie(this)" style="display: none;">Remove</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-secondary btn-full" onclick="addMovieField()" style="margin-bottom: 1rem;">
+                        + Add Another Movie
+                    </button>
+
+                    <div id="error-message" class="error-message" style="display: none;"></div>
+                    <div id="success-message" class="success-message" style="display: none;"></div>
+
+                    <button type="submit" class="btn btn-primary btn-full">Save My Preferences</button>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/auth.js"></script>
+    <script>
+        let movieCount = 1;
+
+        function addMovieField() {
+            movieCount++;
+            const container = document.getElementById('movies-container');
+            const newEntry = document.createElement('div');
+            newEntry.className = 'movie-entry';
+            newEntry.innerHTML = `
+                <div class="form-group">
+                    <label for="movie-${movieCount}">Movie Title</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="movie-${movieCount}" name="movie" class="movie-input" placeholder="Enter a movie title" required>
+                        <button type="button" class="btn-remove" onclick="removeMovie(this)">Remove</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(newEntry);
+            
+            // Show remove buttons on all entries if there's more than one
+            updateRemoveButtons();
+        }
+
+        function removeMovie(button) {
+            const entry = button.closest('.movie-entry');
+            entry.remove();
+            updateRemoveButtons();
+        }
+
+        function updateRemoveButtons() {
+            const entries = document.querySelectorAll('.movie-entry');
+            entries.forEach((entry, index) => {
+                const removeBtn = entry.querySelector('.btn-remove');
+                if (entries.length > 1) {
+                    removeBtn.style.display = 'block';
+                } else {
+                    removeBtn.style.display = 'none';
+                }
+            });
+        }
+
+        document.getElementById('recommendations-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const movies = Array.from(document.querySelectorAll('.movie-input'))
+                .map(input => input.value.trim())
+                .filter(movie => movie.length > 0);
+            
+            if (movies.length === 0) {
+                showError('Please add at least one movie');
+                return;
+            }
+
+            // TODO: Send movies to backend API
+            console.log('Movies to save:', movies);
+            showSuccess(`Successfully saved ${movies.length} movie(s)!`);
+            
+            // Reset form after a delay
+            setTimeout(() => {
+                document.getElementById('recommendations-form').reset();
+                movieCount = 1;
+                const container = document.getElementById('movies-container');
+                container.innerHTML = `
+                    <div class="movie-entry">
+                        <div class="form-group">
+                            <label for="movie-1">Movie Title</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" id="movie-1" name="movie" class="movie-input" placeholder="Enter a movie title" required>
+                                <button type="button" class="btn-remove" onclick="removeMovie(this)" style="display: none;">Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }, 2000);
+        });
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            document.getElementById('success-message').style.display = 'none';
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success-message');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            document.getElementById('error-message').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
+

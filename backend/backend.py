@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi import Form
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from pathlib import Path
 
@@ -9,8 +10,9 @@ import sqlite3
 import bcrypt
 
 #connecting to DB
-
-conn = sqlite3.connect("RotNRecsDB.db", check_same_thread=False)
+# Use absolute path based on backend directory
+DB_PATH = Path(__file__).parent.parent / "RotNRecsDB.db"
+conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
 cursor = conn.cursor()
 
 
@@ -27,6 +29,15 @@ conn.commit()
 
 # Create FastAPI app instance
 app = FastAPI()
+
+# Add CORS middleware to handle cross-origin requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
@@ -99,3 +110,24 @@ def creat_acct(name: str = Form(...),
     conn.commit()
 
     return {"message": f"successfully created User: {name}"}
+
+#retrieves dashboard html when user enters page.
+@app.get("/dashboard", response_class=HTMLResponse)
+def read_dashboard():
+    dashboard_path = FRONTEND_DIR / "dashboard.html"
+    with open(dashboard_path, "r") as f:
+        return f.read()
+
+#retrieves recommendations html when user enters page.
+@app.get("/recommendations", response_class=HTMLResponse)
+def read_recommendations():
+    recommendations_path = FRONTEND_DIR / "recommendations.html"
+    with open(recommendations_path, "r") as f:
+        return f.read()
+
+
+# Run the server with: uvicorn backend.backend:app --reload
+# Or from the project root: python -m uvicorn backend.backend:app --reload
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
