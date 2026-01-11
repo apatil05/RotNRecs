@@ -8,6 +8,7 @@ from pathlib import Path
 
 import sqlite3
 import bcrypt
+import requests
 
 #connecting to DB
 # Use absolute path based on backend directory
@@ -15,6 +16,8 @@ DB_PATH = Path(__file__).parent.parent / "RotNRecsDB.db"
 conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
 cursor = conn.cursor()
 
+#API key for TMDB
+TMDB_API_KEY = "3a5fa2cd5ed10cc42ae78b74ff0ad926"
 
 # Create Users table if it doesn't exist
 cursor.execute("""
@@ -124,6 +127,43 @@ def read_recommendations():
     recommendations_path = FRONTEND_DIR / "recommendations.html"
     with open(recommendations_path, "r") as f:
         return f.read()
+
+# Search TMDB for movies
+@app.get("/api/search-movies")
+def search_movies(query: str):
+
+    #Searches for movies using TMDB API
+    
+    if not query or len(query) < 2:
+        return {"results": []}
+    
+    try:
+        url = f"https://api.themoviedb.org/3/search/movie"
+        params = {
+            "api_key": TMDB_API_KEY,
+            "query": query,
+            "language": "en-US",
+            "page": 1
+        }
+        
+        response = requests.get(url, params=params, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Format results to include only what we need
+        results = []
+        for movie in data.get("results", [])[:10]:  # Limit to 10 results
+            results.append({
+                "id": movie.get("id"),
+                "title": movie.get("title"),
+                "release_date": movie.get("release_date", ""),
+                "overview": movie.get("overview", ""),
+                "poster_path": movie.get("poster_path")
+            })
+        
+        return {"results": results}
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Error searching TMDB: {str(e)}")
 
 
 # Run the server with: uvicorn backend.backend:app --reload

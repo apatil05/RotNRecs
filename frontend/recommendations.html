@@ -28,9 +28,12 @@
                         <div class="movie-entry">
                             <div class="form-group">
                                 <label for="movie-1">Movie Title</label>
-                                <div style="display: flex; gap: 0.5rem;">
-                                    <input type="text" id="movie-1" name="movie" class="movie-input" placeholder="Enter a movie title" required>
-                                    <button type="button" class="btn-remove" onclick="removeMovie(this)" style="display: none;">Remove</button>
+                                <div style="position: relative;">
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <input type="text" id="movie-1" name="movie" class="movie-input" placeholder="Search for a movie..." autocomplete="off" required>
+                                        <button type="button" class="btn-remove" onclick="removeMovie(this)" style="display: none;">Remove</button>
+                                    </div>
+                                    <div id="movie-1-suggestions" class="movie-suggestions" style="display: none;"></div>
                                 </div>
                             </div>
                         </div>
@@ -52,6 +55,94 @@
     <script src="/static/auth.js"></script>
     <script>
         let movieCount = 1;
+        let searchTimeouts = {};
+
+        // Setup autocomplete for a movie input
+        function setupAutocomplete(inputId) {
+            const input = document.getElementById(inputId);
+            const suggestionsDiv = document.getElementById(`${inputId}-suggestions`);
+            
+            if (!input || !suggestionsDiv) return;
+            
+            input.addEventListener('input', function(e) {
+                const query = e.target.value.trim();
+                
+                // Clear previous timeout
+                if (searchTimeouts[inputId]) {
+                    clearTimeout(searchTimeouts[inputId]);
+                }
+                
+                if (query.length < 2) {
+                    suggestionsDiv.style.display = 'none';
+                    return;
+                }
+                
+                // Debounce search
+                searchTimeouts[inputId] = setTimeout(() => {
+                    searchMovies(query, inputId, suggestionsDiv);
+                }, 300);
+            });
+            
+            // Hide suggestions when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+                    suggestionsDiv.style.display = 'none';
+                }
+            });
+        }
+        
+        // Search for movies using TMDB API
+        async function searchMovies(query, inputId, suggestionsDiv) {
+            try {
+                const response = await fetch(`http://localhost:8000/api/search-movies?query=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                
+                if (data.results && data.results.length > 0) {
+                    displaySuggestions(data.results, inputId, suggestionsDiv);
+                } else {
+                    suggestionsDiv.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error searching movies:', error);
+                suggestionsDiv.style.display = 'none';
+            }
+        }
+        
+        // Display movie suggestions
+        function displaySuggestions(movies, inputId, suggestionsDiv) {
+            suggestionsDiv.innerHTML = '';
+            
+            movies.forEach(movie => {
+                const item = document.createElement('div');
+                item.className = 'movie-suggestion-item';
+                item.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem;">
+                        ${movie.poster_path ? 
+                            `<img src="https://image.tmdb.org/t/p/w92${movie.poster_path}" alt="${movie.title}" style="width: 46px; height: 69px; object-fit: cover; border-radius: 4px;">` :
+                            `<div style="width: 46px; height: 69px; background: #e5e7eb; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 0.75rem;">No Image</div>`
+                        }
+                        <div style="flex: 1;">
+                            <div style="font-weight: 500; color: #1f2937;">${movie.title}</div>
+                            ${movie.release_date ? `<div style="font-size: 0.875rem; color: #6b7280;">${movie.release_date.split('-')[0]}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                item.addEventListener('click', function() {
+                    document.getElementById(inputId).value = movie.title;
+                    suggestionsDiv.style.display = 'none';
+                });
+                
+                suggestionsDiv.appendChild(item);
+            });
+            
+            suggestionsDiv.style.display = 'block';
+        }
+        
+        // Setup autocomplete for the first input on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            setupAutocomplete('movie-1');
+        });
 
         function addMovieField() {
             movieCount++;
@@ -61,13 +152,19 @@
             newEntry.innerHTML = `
                 <div class="form-group">
                     <label for="movie-${movieCount}">Movie Title</label>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="text" id="movie-${movieCount}" name="movie" class="movie-input" placeholder="Enter a movie title" required>
-                        <button type="button" class="btn-remove" onclick="removeMovie(this)">Remove</button>
+                    <div style="position: relative;">
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="movie-${movieCount}" name="movie" class="movie-input" placeholder="Search for a movie..." autocomplete="off" required>
+                            <button type="button" class="btn-remove" onclick="removeMovie(this)">Remove</button>
+                        </div>
+                        <div id="movie-${movieCount}-suggestions" class="movie-suggestions" style="display: none;"></div>
                     </div>
                 </div>
             `;
             container.appendChild(newEntry);
+            
+            // Add autocomplete to the new input
+            setupAutocomplete(`movie-${movieCount}`);
             
             // Show remove buttons on all entries if there's more than one
             updateRemoveButtons();
@@ -116,13 +213,18 @@
                     <div class="movie-entry">
                         <div class="form-group">
                             <label for="movie-1">Movie Title</label>
-                            <div style="display: flex; gap: 0.5rem;">
-                                <input type="text" id="movie-1" name="movie" class="movie-input" placeholder="Enter a movie title" required>
-                                <button type="button" class="btn-remove" onclick="removeMovie(this)" style="display: none;">Remove</button>
+                            <div style="position: relative;">
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <input type="text" id="movie-1" name="movie" class="movie-input" placeholder="Search for a movie..." autocomplete="off" required>
+                                    <button type="button" class="btn-remove" onclick="removeMovie(this)" style="display: none;">Remove</button>
+                                </div>
+                                <div id="movie-1-suggestions" class="movie-suggestions" style="display: none;"></div>
                             </div>
                         </div>
                     </div>
                 `;
+                // Re-setup autocomplete for the reset input
+                setupAutocomplete('movie-1');
             }, 2000);
         });
 
