@@ -5,6 +5,7 @@ from fastapi import Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from pathlib import Path
+from typing import List
 
 import sqlite3
 import bcrypt
@@ -14,6 +15,8 @@ import requests
 # Use absolute path based on backend directory
 DB_PATH = Path(__file__).parent.parent / "RotNRecsDB.db"
 conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+# Enable foreign key constraints
+conn.execute("PRAGMA foreign_keys = ON")
 cursor = conn.cursor()
 
 #API key for TMDB
@@ -28,7 +31,24 @@ CREATE TABLE IF NOT EXISTS Users (
     password TEXT NOT NULL
 )
 """)
+
+# Create Movies table if it doesn't exist
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS Movies (
+    movie_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    movie_title TEXT NOT NULL,
+    tmdb_id INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id)
+)
+""")
 conn.commit()
+
+# Pydantic models for request/response
+class MovieRequest(BaseModel):
+    user_id: int
+    movies: List[str]
 
 # Create FastAPI app instance
 app = FastAPI()
@@ -80,7 +100,8 @@ def check_acct(
     ):
         raise HTTPException(status_code=400, detail="Incorrect password")
     
-    return {"message": "Login successful"}
+    user_id = row[0]  # Get user_id from the first column
+    return {"message": "Login successful", "user_id": user_id}
         
 
 #reads register html when user enter page.
@@ -111,8 +132,11 @@ def creat_acct(name: str = Form(...),
         (name, email, hashed_password) 
     )
     conn.commit()
+    
+    # Get the user_id of the newly created user
+    user_id = cursor.lastrowid
 
-    return {"message": f"successfully created User: {name}"}
+    return {"message": f"successfully created User: {name}", "user_id": user_id}
 
 #retrieves dashboard html when user enters page.
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -164,6 +188,79 @@ def search_movies(query: str):
         return {"results": results}
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Error searching TMDB: {str(e)}")
+
+# Save movies to database
+@app.post("/api/save-movies")
+def save_movies(movie_request: MovieRequest):
+    """
+    Save user's favorite movies to the database
+    """
+    user_id = movie_request.user_id
+    movies = movie_request.movies
+    
+    # Verify user exists
+    cursor.execute("SELECT user_id FROM Users WHERE user_id = ?", (user_id,))
+    user_check = cursor.fetchone()
+    if not user_check:
+        raise HTTPException(status_code=404, detail=f"User not found with user_id: {user_id}")
+    
+    saved_count = 0
+    errors = []
+    
+    for movie_title in movies:
+        if not movie_title or not movie_title.strip():
+            continue
+        
+        movie_title_clean = movie_title.strip()
+        
+        # Try to get TMDB ID for the movie
+        tmdb_id = None
+        try:
+            url = f"https://api.themoviedb.org/3/search/movie"
+            params = {
+                "api_key": TMDB_API_KEY,
+                "query": movie_title_clean,
+                "language": "en-US",
+                "page": 1
+            }
+            response = requests.get(url, params=params, timeout=3)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("results") and len(data["results"]) > 0:
+                    tmdb_id = data["results"][0].get("id")
+        except Exception as e:
+            print(f"TMDB search error for '{movie_title_clean}': {e}")
+            # Continue without TMDB ID if search fails
+        
+        # Insert movie into database
+        try:
+            cursor.execute(
+                "INSERT INTO Movies (user_id, movie_title, tmdb_id) VALUES (?, ?, ?)",
+                (user_id, movie_title_clean, tmdb_id)
+            )
+            saved_count += 1
+            print(f"Successfully saved movie: '{movie_title_clean}' for user_id: {user_id}")
+        except sqlite3.IntegrityError as e:
+            # Movie might already exist for this user, skip it
+            error_msg = f"IntegrityError for movie '{movie_title_clean}': {e}"
+            print(error_msg)
+            errors.append(error_msg)
+        except Exception as e:
+            # Log any other errors
+            error_msg = f"Error saving movie '{movie_title_clean}': {e}"
+            print(error_msg)
+            errors.append(error_msg)
+    
+    conn.commit()
+    
+    if saved_count == 0 and errors:
+        raise HTTPException(status_code=400, detail=f"Failed to save any movies. Errors: {'; '.join(errors)}")
+    
+    return {
+        "message": f"Successfully saved {saved_count} movie(s)", 
+        "saved_count": saved_count,
+        "errors": errors if errors else None
+    }
 
 
 # Run the server with: uvicorn backend.backend:app --reload

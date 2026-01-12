@@ -52,7 +52,6 @@
         </div>
     </main>
 
-    <script src="/static/auth.js"></script>
     <script>
         let movieCount = 1;
         let searchTimeouts = {};
@@ -142,6 +141,20 @@
         // Setup autocomplete for the first input on page load
         document.addEventListener('DOMContentLoaded', function() {
             setupAutocomplete('movie-1');
+            
+            // Debug: Check if user_id exists on page load
+            const user_id = localStorage.getItem('user_id');
+            console.log('=== Page Load Debug ===');
+            console.log('user_id on page load:', user_id);
+            console.log('All localStorage keys:', Object.keys(localStorage));
+            console.log('All localStorage values:', {...localStorage});
+            
+            if (!user_id) {
+                console.warn('⚠️ WARNING: No user_id found in localStorage!');
+                console.warn('You may need to log in again.');
+            } else {
+                console.log('✅ user_id found:', user_id);
+            }
         });
 
         function addMovieField() {
@@ -200,32 +213,89 @@
                 return;
             }
 
-            // TODO: Send movies to backend API
-            console.log('Movies to save:', movies);
-            showSuccess(`Successfully saved ${movies.length} movie(s)!`);
+            // Get user_id from localStorage
+            const user_id = localStorage.getItem('user_id');
+            console.log('=== Form Submission Debug ===');
+            console.log('user_id from localStorage:', user_id);
+            console.log('Type:', typeof user_id);
+            console.log('All localStorage:', {...localStorage});
             
-            // Reset form after a delay
-            setTimeout(() => {
-                document.getElementById('recommendations-form').reset();
-                movieCount = 1;
-                const container = document.getElementById('movies-container');
-                container.innerHTML = `
-                    <div class="movie-entry">
-                        <div class="form-group">
-                            <label for="movie-1">Movie Title</label>
-                            <div style="position: relative;">
-                                <div style="display: flex; gap: 0.5rem;">
-                                    <input type="text" id="movie-1" name="movie" class="movie-input" placeholder="Search for a movie..." autocomplete="off" required>
-                                    <button type="button" class="btn-remove" onclick="removeMovie(this)" style="display: none;">Remove</button>
+            // Check if user_id exists
+            if (!user_id || user_id === 'null' || user_id === 'undefined') {
+                console.error('No user_id found!');
+                showError('Please log in first.');
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 2000);
+                return;
+            }
+            
+            // Convert to number
+            const userIdNum = parseInt(user_id, 10);
+            console.log('Parsed user_id:', userIdNum);
+            if (isNaN(userIdNum) || userIdNum <= 0) {
+                console.error('Invalid user_id:', userIdNum);
+                showError('Invalid session. Please log in again.');
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 2000);
+                return;
+            }
+            
+            console.log('Proceeding with user_id:', userIdNum);
+
+            // Send movies to backend API
+            fetch('http://localhost:8000/api/save-movies', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    user_id: userIdNum,
+                    movies: movies
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.detail || `HTTP error! status: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.message) {
+                    showSuccess(data.message);
+                    // Reset form after a delay
+                    setTimeout(() => {
+                        document.getElementById('recommendations-form').reset();
+                        movieCount = 1;
+                        const container = document.getElementById('movies-container');
+                        container.innerHTML = `
+                            <div class="movie-entry">
+                                <div class="form-group">
+                                    <label for="movie-1">Movie Title</label>
+                                    <div style="position: relative;">
+                                        <div style="display: flex; gap: 0.5rem;">
+                                            <input type="text" id="movie-1" name="movie" class="movie-input" placeholder="Search for a movie..." autocomplete="off" required>
+                                            <button type="button" class="btn-remove" onclick="removeMovie(this)" style="display: none;">Remove</button>
+                                        </div>
+                                        <div id="movie-1-suggestions" class="movie-suggestions" style="display: none;"></div>
+                                    </div>
                                 </div>
-                                <div id="movie-1-suggestions" class="movie-suggestions" style="display: none;"></div>
                             </div>
-                        </div>
-                    </div>
-                `;
-                // Re-setup autocomplete for the reset input
-                setupAutocomplete('movie-1');
-            }, 2000);
+                        `;
+                        // Re-setup autocomplete for the reset input
+                        setupAutocomplete('movie-1');
+                    }, 2000);
+                } else {
+                    showError('Failed to save movies');
+                }
+            })
+            .catch(error => {
+                console.error('Error saving movies:', error);
+                showError('Error saving movies: ' + error.message);
+            });
         });
 
         function showError(message) {
